@@ -1,66 +1,76 @@
-const httpReq = require("request-promise")
-const url = require('url')
-const cheerio = require("cheerio")
-const urlLink = "https://ww6.mangakakalot.tv"
+const axios = require("axios");
+const url = require("url");
+const cheerio = require("cheerio");
 
-const dataCollector = (req, res, next) => {
+const urlLink = "https://ww6.mangakakalot.tv";
 
-    httpReq(`${urlLink}/manga_list?type=latest&category=None&state=None&page=1000000`)
-        .then((html) => {
+const dataCollector = async (req, res, next) => {
+  try {
+    const response = await axios.get(
+      `${urlLink}/manga_list?type=latest&category=None&state=None&page=1`,
+      {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36",
+          "Accept-Language": "en-US,en;q=0.9",
+        },
+        timeout: 10000,
+      }
+    );
 
+    const html = response.data;
+    const $ = cheerio.load(html);
 
-            const $ = cheerio.load(html)
-            const category = []
-            const type = []
-            const state = []
+    const category = [];
+    const type = [];
+    const state = [];
 
-            $(".truyen-list .tag:eq(0) li a").map((index, val) => {
+    // CATEGORY
+    $(".truyen-list .tag:eq(0) li a").each((index, val) => {
+      const target = $(val);
+      const id = url.parse(target.attr("href"), true).query.category;
 
-                const target = $(val)
+      category.push({
+        id: id,
+        name: target.text(),
+      });
+    });
 
-                const id = url.parse(target.attr("href"), true).query.category
+    // TYPE
+    $(".truyen-list .tag:eq(1) li a").each((index, val) => {
+      const target = $(val);
+      const id = url.parse(target.attr("href"), true).query.type;
 
-                category[index] = {
-                    id: id,
-                    name: target.text()
-                }
-            })
+      type.push({
+        id: id,
+        name: target.text(),
+      });
+    });
 
-            $(".truyen-list .tag:eq(1) li a").map((index, val) => {
+    // STATE
+    $(".truyen-list .tag:eq(2) li a").each((index, val) => {
+      const target = $(val);
+      const id = url.parse(target.attr("href"), true).query.state;
 
+      state.push({
+        id: id,
+        name: target.text(),
+      });
+    });
 
-                const target = $(val)
-                const id = url.parse(target.attr("href"), true).query.type
+    req.metaData = {
+      type,
+      state,
+      category,
+    };
 
-                type[index] = {
-                    id: id,
-                    name: target.text()
-                }
-            })
+    next();
+  } catch (e) {
+    res.status(500).json({
+      error: "Fetch failed",
+      details: e.message,
+    });
+  }
+};
 
-            $(".truyen-list .tag:eq(2) li a").map((index, val) => {
-
-                const target = $(val)
-                const id = url.parse(target.attr("href"), true).query.state
-
-                state[index] = {
-                    id: id,
-                    name: target.text()
-                }
-            })
-
-            req.metaData = {
-                type: type,
-                state: state,
-                category: category
-            }
-
-            next()
-        })
-        .catch((e) => {
-            res.status(500).json({ error: e })
-        })
-}
-
-
-module.exports = dataCollector
+module.exports = dataCollector;
